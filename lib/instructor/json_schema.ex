@@ -135,7 +135,7 @@ defmodule Instructor.JSONSchema do
       ecto_schema.__schema__(:fields)
       |> Enum.map(fn field ->
         type = ecto_schema.__schema__(:type, field)
-        value = for_type(type)
+        value = for_type(type, field)
         value = Map.merge(%{title: Atom.to_string(field)}, value)
 
         {field, value}
@@ -261,17 +261,26 @@ defmodule Instructor.JSONSchema do
 
   defp find_all_values(_, _pred), do: []
 
-  defp for_type(:any), do: %{}
-  defp for_type(:id), do: %{type: "integer", description: "Integer, e.g. 1"}
-  defp for_type(:binary_id), do: %{type: "string"}
-  defp for_type(:integer), do: %{type: "integer", description: "Integer, e.g. 1"}
-  defp for_type(:float), do: %{type: "number", description: "Float, e.g. 1.27", format: "float"}
-  defp for_type(:boolean), do: %{type: "boolean", description: "Boolean, e.g. true"}
-  defp for_type(:string), do: %{type: "string", description: "String, e.g. 'hello'"}
-  # defp for_type(:binary), do: %{type: "unsupported"}
-  defp for_type({:array, type}), do: %{type: "array", items: for_type(type)}
+  defp for_type(:any, _field \\ nil), do: for_type(:any, nil)
+  defp for_type(:any, _field), do: %{}
+  defp for_type(:id, _field), do: %{type: "integer", description: "Integer, e.g. 1"}
+  defp for_type(:binary_id, _field), do: %{type: "string"}
+  defp for_type(:integer, _field), do: %{type: "integer", description: "Integer, e.g. 1"}
 
-  defp for_type(:map),
+  defp for_type(:float, _field),
+    do: %{type: "number", description: "Float, e.g. 1.27", format: "float"}
+
+  defp for_type(:boolean, _field),
+    do: %{type: "boolean", description: "Boolean, e.g. true"}
+
+  defp for_type(:string, _field),
+    do: %{type: "string", description: "String, e.g. 'hello'"}
+
+  # defp for_type(:binary), do: %{type: "unsupported"}
+  defp for_type({:array, type}, _field),
+    do: %{type: "array", items: for_type(type, _field)}
+
+  defp for_type(:map, _field),
     do: %{
       type: "object",
       properties: %{},
@@ -279,7 +288,7 @@ defmodule Instructor.JSONSchema do
       description: "An object with arbitrary keys and values, e.g. { key: value }"
     }
 
-  defp for_type({:map, type}),
+  defp for_type({:map, type}, _field),
     do: %{
       type: "object",
       properties: %{},
@@ -287,59 +296,56 @@ defmodule Instructor.JSONSchema do
       description: "An object with values of a type #{inspect(type)}, e.g. { key: value }"
     }
 
-  defp for_type(:decimal), do: %{type: "number", format: "float"}
+  defp for_type(:decimal, _field), do: %{type: "number", format: "float"}
 
-  defp for_type(:date),
-    do: %{type: "string", description: "ISO8601 Date, [yyyy]-[mm]-[dd], e.g. \"2024-07-20\"", format: "date"}
+  defp for_type(:date, _field),
+    do: %{type: "string", description: "ISO8601 Date, e.g. \"2024-07-20\"", format: "date"}
 
-  defp for_type(:time),
+  defp for_type(:time, _field),
     do: %{
       type: "string",
-      description: "ISO8601 Time, [hh]:[mm]:[ss], e.g. \"00:12:04\"",
+      description: "ISO8601 Time, e.g. \"12:00:00\"",
       pattern: "^[0-9]{2}:?[0-9]{2}:?[0-9]{2}$"
     }
 
-  defp for_type(:time_usec),
+  defp for_type(:time_usec, _field),
     do: %{
       type: "string",
-      description: "ISO8601 Time with microseconds, [hh]:[mm]:[ss].[microseconds], e.g. \"12:00:00.000000\"",
+      description: "ISO8601 Time with microseconds, e.g. \"12:00:00.000000\"",
       pattern: "^[0-9]{2}:?[0-9]{2}:?[0-9]{2}.[0-9]{6}$"
     }
 
-  defp for_type(:naive_datetime),
+  defp for_type(:naive_datetime, _field),
     do: %{
       type: "string",
-      description: "ISO8601 DateTime, [yyyy]-[mm]-[dd]T[hh]:[mm]:[ss], e.g. \"2024-07-20T12:00:00\"",
+      description: "ISO8601 DateTime, e.g. \"2024-07-20T12:00:00\"",
       format: "date-time"
     }
 
-  defp for_type(:naive_datetime_usec),
+  defp for_type(:naive_datetime_usec, _field),
     do: %{
       type: "string",
-      description: "ISO8601 DateTime with microseconds, [yyyy]-[mm]-[dd]T[hh]:[mm]:[ss].[microseconds], e.g. \"2024-07-20T12:00:00.000000\"",
+      description: "ISO8601 DateTime with microseconds, e.g. \"2024-07-20T12:00:00.000000\"",
       format: "date-time"
     }
 
-  defp for_type(:utc_datetime),
+  defp for_type(:utc_datetime, _field),
     do: %{
       type: "string",
-      description: "ISO8601 DateTime, [yyyy]-[mm]-[dd]T[hh]:[mm]:[ss]Z, e.g. \"2024-07-20T12:00:00Z\"",
+      description: "ISO8601 DateTime, e.g. \"2024-07-20T12:00:00Z\"",
       format: "date-time"
     }
 
-  defp for_type(:utc_datetime_usec),
+  defp for_type(:utc_datetime_usec, _field),
     do: %{
       type: "string",
-      description: "ISO8601 DateTime with microseconds, [yyyy]-[mm]-[dd]T[hh]:[mm]:[ss].[microseconds]Z, e.g. \"2024-07-20T12:00:00.000000Z\"",
+      description: "ISO8601 DateTime with microseconds, e.g. \"2024-07-20T12:00:00.000000Z\"",
       format: "date-time"
     }
-
-  defp for_type(:duration) do
-    Instructor.Types.Duration.to_json_schema()
-  end
 
   defp for_type(
-         {:parameterized, {Ecto.Embedded, %Ecto.Embedded{cardinality: :many, related: related}}}
+         {:parameterized, {Ecto.Embedded, %Ecto.Embedded{cardinality: :many, related: related}}},
+         _field
        )
        when is_ecto_schema(related) do
     title = title_for(related)
@@ -352,7 +358,8 @@ defmodule Instructor.JSONSchema do
   end
 
   defp for_type(
-         {:parameterized, {Ecto.Embedded, %Ecto.Embedded{cardinality: :many, related: related}}}
+         {:parameterized, {Ecto.Embedded, %Ecto.Embedded{cardinality: :many, related: related}}},
+         _field
        )
        when is_ecto_types(related) do
     properties =
@@ -373,14 +380,16 @@ defmodule Instructor.JSONSchema do
   end
 
   defp for_type(
-         {:parameterized, {Ecto.Embedded, %Ecto.Embedded{cardinality: :one, related: related}}}
+         {:parameterized, {Ecto.Embedded, %Ecto.Embedded{cardinality: :one, related: related}}},
+         _field
        )
        when is_ecto_schema(related) do
     %{"$ref": "#/$defs/#{title_for(related)}"}
   end
 
   defp for_type(
-         {:parameterized, {Ecto.Embedded, %Ecto.Embedded{cardinality: :one, related: related}}}
+         {:parameterized, {Ecto.Embedded, %Ecto.Embedded{cardinality: :one, related: related}}},
+         _field
        )
        when is_ecto_types(related) do
     properties =
@@ -398,14 +407,16 @@ defmodule Instructor.JSONSchema do
     }
   end
 
-  defp for_type({:parameterized, {Ecto.Enum, %{mappings: mappings}}}) do
+  defp for_type({:parameterized, {Ecto.Enum, %{mappings: mappings}}}, _field) do
     %{
       type: "string",
       enum: Keyword.keys(mappings)
     }
   end
 
-  defp for_type(mod) do
+  defp for_type(mod, field) do
+    dbg(field)
+
     if function_exported?(mod, :to_json_schema, 0) do
       mod.to_json_schema()
     else
@@ -451,7 +462,8 @@ defmodule Instructor.JSONSchema do
     |> maybe_call_with_path(fun, path, opts)
   end
 
-  defp do_traverse_and_update(tree, fun, path, opts), do: maybe_call_with_path(tree, fun, path, opts)
+  defp do_traverse_and_update(tree, fun, path, opts),
+    do: maybe_call_with_path(tree, fun, path, opts)
 
   defp maybe_call_with_path(value, fun, path, opts) do
     if Keyword.get(opts, :include_path, false) do

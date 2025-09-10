@@ -122,6 +122,12 @@ defmodule Instructor do
           | {:error, String.t()}
           | stream()
   def chat_completion(params, config \\ nil) do
+    IO.puts("")
+    IO.puts("")
+    IO.puts("Hello, this is Instructor, your AI assistant for Ecto Schemas and LLMs.")
+    IO.puts("=======================================================================")
+    IO.puts("")
+
     params =
       params
       |> Keyword.put_new(:max_retries, 0)

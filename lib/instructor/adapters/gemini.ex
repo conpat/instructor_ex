@@ -35,7 +35,18 @@ defmodule Instructor.Adapters.Gemini do
   """
   @impl true
   def chat_completion(params, user_config \\ nil) do
+    IO.puts("")
+    IO.puts("")
+    IO.puts("")
+    IO.puts("GeminiAdapter: chat_completion called/")
+    # IO.puts("")
+    # IO.puts("params:")
+    # dbg(params)
+    IO.puts("")
+    IO.puts("config:")
+
     config = config(user_config)
+    # |> dbg()
 
     # Peel off instructor only parameters
     {_, params} = Keyword.pop(params, :response_model)
@@ -51,31 +62,63 @@ defmodule Instructor.Adapters.Gemini do
 
     # Format the messages into the correct format for Geminic
     {messages, params} = Map.pop!(params, :messages)
+    IO.puts("")
+    IO.puts("messages:")
+    # dbg(messages)
 
-    {system_instruction, contents} =
+    {system_instructions, contents} =
       messages
-      |> Enum.reduce({%{role: "system", parts: []}, []}, fn
-        %{role: "assistant", content: content}, {system_instructions, history} ->
-          {system_instructions, [%{role: "model", parts: [%{text: content}]} | history]}
+      |> Enum.reduce({[], []}, fn
+        %{role: "assistant", content: content}, {system_instructions, contents} ->
+          {system_instructions, [[%{text: content}] | contents]}
 
-        %{role: "user", content: content}, {system_instructions, history}
+        %{role: "user", content: content}, {system_instructions, contents}
         when is_binary(content) ->
-          {system_instructions, [%{role: "user", parts: [%{text: content}]} | history]}
+          dbg("User message is a binary string, converting to parts")
+          {system_instructions, [%{text: content} | contents]}
 
-        %{role: "user", content: content}, {system_instructions, history} ->
-          {system_instructions, [%{role: "user", parts: [content]} | history]}
+        %{role: "user", content: content}, {system_instructions, contents} ->
+          parts =
+            Enum.map(content, fn
+              %{type: "text", text: text} ->
+                %{text: text}
 
-        %{role: "system", content: content}, {system_instructions, history} ->
-          part = %{text: content}
-          {Map.update!(system_instructions, :parts, fn parts -> [part | parts] end), history}
+              %{type: "image_url", image_url: %{url: url, mime_type: mime_type}} ->
+                %{file_data: %{mime_type: mime_type, file_uri: url}}
+
+              %{type: "video_url", video_url: %{url: url, mime_type: mime_type}} ->
+                %{file_data: %{mime_type: mime_type, file_uri: url}}
+
+              %{type: "pdf_url", file_url: %{url: url, mime_type: "application/pdf"}} ->
+                %{inline_data: %{mime_type: "application/pdf", file_uri: url}}
+
+              {:inline_data, %{data: encoded_pdf, mime_type: "application/pdf"}} ->
+                %{inline_data: %{mime_type: "application/pdf", data: encoded_pdf}}
+
+                # {"inline_data": {"mime_type": "application/pdf", "data": "'"$ENCODED_PDF"'"}},
+
+                # {"file_data":{"mime_type": "application/pdf", "file_uri": '$file_uri'}}]
+
+                # {"file_data":{"mime_type": "'"${MIME_TYPE}"'", "file_uri": "'"${file_uri}"'"}},
+            end)
+
+          {system_instructions, parts ++ contents}
+
+        %{role: "system", content: content}, {system_instructions, contents} ->
+          {[%{text: content} | system_instructions], contents}
       end)
 
-    system_instruction = Map.update!(system_instruction, :parts, &Enum.reverse/1)
-    contents = Enum.reverse(contents)
+    # |> dbg()
+
+    ### No clue why this is here
+    # system_instructions = Map.update!(system_instructions, :parts, &Enum.reverse/1)
+    # contents = Enum.reverse(contents)
 
     # Split out the model config params from the rest of the params
     {model_config_params, params} =
       Map.split(params, [:top_k, :top_p, :max_tokens, :temperature, :n, :stop])
+
+    # |> dbg()
 
     generation_config =
       model_config_params
@@ -94,11 +137,11 @@ defmodule Instructor.Adapters.Gemini do
       end)
 
     params =
-      if system_instruction.parts != [],
-        do: Map.put(params, :systemInstruction, system_instruction),
+      if system_instructions != [],
+        do: Map.put(params, :systemInstruction, %{parts: system_instructions}),
         else: params
 
-    params = Map.put(params, :contents, contents)
+    params = Map.put(params, :contents, %{parts: contents})
 
     params =
       case params do
@@ -134,6 +177,15 @@ defmodule Instructor.Adapters.Gemini do
         _ ->
           params
       end
+
+    # IO.puts("")
+    # IO.puts("")
+    # IO.puts("")
+    # IO.puts("####################")
+    # IO.puts("#####  Final params:")
+    # IO.puts("####################")
+    # IO.puts("")
+    # dbg(params)
 
     if stream do
       do_streaming_chat_completion(mode, params, config)
@@ -211,10 +263,28 @@ defmodule Instructor.Adapters.Gemini do
   end
 
   defp do_chat_completion(mode, params, config) do
+    # IO.puts("")
+    # IO.puts("")
+    # IO.puts("")
+    # IO.puts("Gemini: do_chat_completion")
+    # IO.puts("-----------------------------")
+    # IO.puts("")
+    # IO.puts("mode:")
+    # dbg(mode)
+    # IO.puts("")
+    # IO.puts("params:")
+    # dbg(params)
+    # IO.puts("")
+    # IO.puts("config:")
+    # dbg(config)
+    # IO.puts("")
+
     {model, params} = Map.pop!(params, :model)
 
     response =
       Req.merge(gemini_req(), http_options(config))
+      # |> Req.merge(
+      #   method: :post,
       |> Req.post(
         url: url(config),
         path_params: [model: model, api_version: api_version(config)],
@@ -222,6 +292,8 @@ defmodule Instructor.Adapters.Gemini do
         json: params,
         rpc_function: :generateContent
       )
+
+    # dbg(response)
 
     with {:ok, %Req.Response{status: 200, body: body} = response} <- response,
          {:ok, body} <- parse_response_for_mode(mode, body) do
@@ -397,7 +469,7 @@ defmodule Instructor.Adapters.Gemini do
       api_version: :v1beta,
       api_url: "https://generativelanguage.googleapis.com/",
       api_key: System.get_env("GOOGLE_API_KEY"),
-      http_options: [receive_timeout: 60_000]
+      http_options: [receive_timeout: 10 * 60_000]
     ]
 
     Keyword.merge(default_config, base_config)
